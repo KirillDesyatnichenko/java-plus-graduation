@@ -1,14 +1,116 @@
+version: '3.9'
+
 services:
-  stats-server:
+  discovery-server:
+    build:
+      context: ./infra/discovery-server
+      dockerfile: Dockerfile
+    image: ewm-discovery-server:latest
+    container_name: discovery-server
     ports:
-      - "9090:9090"
+      - "8761:8761"
+
+  config-server:
+    build:
+      context: ./infra/config-server
+      dockerfile: Dockerfile
+    image: ewm-config-server:latest
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    depends_on:
+      - discovery-server
+
+  gateway-server:
+    build:
+      context: ./infra/gateway-server
+      dockerfile: Dockerfile
+    image: ewm-gateway-server:latest
+    container_name: gateway-server
+    ports:
+      - "8081:8080"
+    depends_on:
+      - discovery-server
+      - config-server
 
   stats-db:
     image: postgres:16.1
-
-  ewm-service:
+    container_name: stats-db
+    environment:
+      - POSTGRES_DB=statsdb
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=12345
+    volumes:
+      - ./volumes/stats-db:/var/lib/postgresql/data
     ports:
-      - "8080:8080"
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  stats-server:
+    build:
+      context: ./stats-service/stats-server
+      dockerfile: Dockerfile
+    image: ewm-stats-server:latest
+    container_name: stats-server
+    ports:
+      - "9090:9090"
+    depends_on:
+      stats-db:
+        condition: service_healthy
+      config-server:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://stats-db:5432/statsdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:9090/actuator/health || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   ewm-db:
     image: postgres:16.1
+    container_name: ewm-db
+    environment:
+      - POSTGRES_DB=ewmdb
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=12345
+    volumes:
+      - ./volumes/ewm-db:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ewm-service:
+    build:
+      context: ./core/main-service
+      dockerfile: Dockerfile
+    image: ewm-main-service:latest
+    container_name: ewm-main-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      stats-server:
+        condition: service_healthy
+      ewm-db:
+        condition: service_healthy
+      config-server:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://ewm-db:5432/ewmdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+      - STATS_SERVER_URL=http://stats-server:9090
