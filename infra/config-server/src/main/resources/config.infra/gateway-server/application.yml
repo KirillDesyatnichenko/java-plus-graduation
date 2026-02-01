@@ -8,8 +8,7 @@ spring:
         - id: main-service
           uri: lb://main-service
           predicates:
-            - Path=/**
-            - Not=Path=/actuator/**
+            - Path=/admin/**,/users/**,/events/**,/categories/**,/compilations/**
 
 server:
   port: 8080
