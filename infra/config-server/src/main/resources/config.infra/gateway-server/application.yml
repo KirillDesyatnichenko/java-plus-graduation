@@ -6,7 +6,7 @@ spring:
           enabled: true
       routes:
         - id: main-service
-          uri: lb://main-service
+          uri: lb://MAIN-SERVICE
           predicates:
             - Path=/admin/**,/users/**,/events/**,/categories/**,/compilations/**
 
