@@ -71,7 +71,7 @@ public class StatsClient {
                     builder.queryParam("uris", u);
                 }
             }
-            URI uri = builder.build(true).toUri();
+            URI uri = builder.build(false).encode().toUri();
 
             return handleErrors(restClient.get().uri(uri))
                     .body(new org.springframework.core.ParameterizedTypeReference<List<ViewStatsDto>>() {

@@ -1,6 +1,9 @@
 spring:
   application:
     name: stats-server
+  sql:
+    init:
+      mode: always
   config:
     import: "optional:configserver:"
   cloud:

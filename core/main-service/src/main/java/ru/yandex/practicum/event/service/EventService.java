@@ -172,8 +172,8 @@ public class EventService {
 
         EventFullDto dto = eventMapper.toEventFullDto(event);
         if (dto != null) {
-            saveHit();
-            String uri = "/events/" + dto.getId();
+            String uri = request.getRequestURI();
+            saveHit(uri);
             Map<String, Long> hits = fetchHitsForUris(List.of(uri));
             dto.setViews(hits.getOrDefault(uri, 0L));
         }
@@ -241,11 +241,15 @@ public class EventService {
     }
 
     private void saveHit() {
+        saveHit(request.getRequestURI());
+    }
+
+    private void saveHit(String uri) {
         try {
             EndpointHitDto hitDto = EndpointHitDto.builder()
                     .app("ewm-main-service")
-                    .uri(request.getRequestURI())
-                    .ip(request.getRemoteAddr())
+                    .uri(uri)
+                    .ip(resolveClientIp())
                     .timestamp(LocalDateTime.now())
                     .build();
 
@@ -253,6 +257,18 @@ public class EventService {
         } catch (Exception e) {
             log.error("Не удалось отправить информацию о просмотре в сервис статистики: {}", e.getMessage());
         }
+    }
+
+    private String resolveClientIp() {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        return request.getRemoteAddr();
     }
 
     private Map<String, Long> fetchHitsForUris(List<String> uris) {
