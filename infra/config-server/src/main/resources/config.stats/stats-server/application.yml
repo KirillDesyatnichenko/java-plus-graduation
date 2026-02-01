@@ -7,7 +7,7 @@ spring:
       mode: always
   datasource:
     driverClassName: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/statsdb
+    url: jdbc:postgresql://localhost:5433/statsdb
     username: dbuser
     password: 12345
 

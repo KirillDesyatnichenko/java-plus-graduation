@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.3.4</version>
+		<version>3.4.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 
@@ -33,8 +33,7 @@
 		<jakarta-persistence-api.version>3.2.0</jakarta-persistence-api.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<mapstruct-binding.version>0.2.0</mapstruct-binding.version>
-		<spring-cloud.version>2023.0.4</spring-cloud.version>
-		<spring-retry.version>2.0.10</spring-retry.version>
+		<spring-cloud.version>2024.0.2</spring-cloud.version>
 	</properties>
 
 	<dependencyManagement>
@@ -45,11 +44,6 @@
 				<version>${spring-cloud.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.springframework.retry</groupId>
-				<artifactId>spring-retry</artifactId>
-				<version>${spring-retry.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

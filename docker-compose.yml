@@ -40,8 +40,8 @@ services:
       - POSTGRES_DB=statsdb
       - POSTGRES_USER=dbuser
       - POSTGRES_PASSWORD=12345
-    volumes:
-      - ./volumes/stats-db:/var/lib/postgresql/data
+    tmpfs:
+      - /var/lib/postgresql/data
     ports:
       - "5433:5432"
     healthcheck:
@@ -82,8 +82,8 @@ services:
       - POSTGRES_DB=ewmdb
       - POSTGRES_USER=dbuser
       - POSTGRES_PASSWORD=12345
-    volumes:
-      - ./volumes/ewm-db:/var/lib/postgresql/data
+    tmpfs:
+      - /var/lib/postgresql/data
     ports:
       - "5434:5432"
     healthcheck:
