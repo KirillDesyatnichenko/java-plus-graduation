@@ -6,7 +6,7 @@ spring:
           enabled: true
       routes:
         - id: main-service
-          uri: lb://main-service
+          uri: lb://MAIN-SERVICE
           predicates:
             - Path=/**
 
@@ -17,8 +17,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,gateway
   endpoint:
+    gateway:
+      enabled: true
     health:
       show-details: never
 
