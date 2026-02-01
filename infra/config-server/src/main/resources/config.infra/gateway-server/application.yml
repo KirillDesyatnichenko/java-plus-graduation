@@ -6,7 +6,7 @@ spring:
           enabled: true
       routes:
         - id: main-service
-          uri: lb://MAIN-SERVICE
+          uri: lb://main-service
           predicates:
             - Path=/**
 
