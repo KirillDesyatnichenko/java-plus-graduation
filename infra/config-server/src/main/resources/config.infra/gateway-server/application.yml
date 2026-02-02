@@ -1,0 +1,29 @@
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: main-service
+          uri: lb://MAIN-SERVICE
+          predicates:
+            - Path=/admin/**,/users/**,/events/**,/categories/**,/compilations/**
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      enabled: true
+    health:
+      show-details: never
+
+eureka:
+  instance:
+    instance-id: ${spring.application.name}:${random.value}
