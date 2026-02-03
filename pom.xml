@@ -21,7 +21,7 @@
 		<module>stats-service</module>
 		<module>core</module>
 		<module>infra</module>
-	</modules>
+    </modules>
 
 	<properties>
 		<java.version>21</java.version>
