@@ -23,7 +23,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     List<Request> findByEventIdAndIdIn(Long eventId, List<Long> requestIds);
 
     @Query("""
-            SELECT new ru.yandex.practicum.request.dto.ConfirmedRequestCount(e.id, COUNT(r))
+            SELECT new ru.yandex.practicum.request.dto.ConfirmedRequestCount(r.eventId, COUNT(r))
             FROM Request r
             WHERE r.status = :status
                 AND r.eventId IN :eventIds
