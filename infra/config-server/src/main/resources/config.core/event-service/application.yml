@@ -34,3 +34,34 @@ eureka:
 stats:
   service:
     id: stats-server
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+resilience4j:
+  retry:
+    instances:
+      user-service:
+        max-attempts: 3
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - feign.RetryableException
+          - feign.FeignException
+          - java.io.IOException
+      request-service:
+        max-attempts: 3
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - feign.RetryableException
+          - feign.FeignException
+          - java.io.IOException

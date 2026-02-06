@@ -46,6 +46,7 @@ public class EventRepositoryImpl implements EventRepositoryCustom {
 
         return queryFactory
                 .selectFrom(event)
+                .leftJoin(event.category).fetchJoin()
                 .where(where)
                 .orderBy(event.eventDate.desc())
                 .offset(filter.getFrom())
@@ -86,6 +87,7 @@ public class EventRepositoryImpl implements EventRepositoryCustom {
 
         JPQLQuery<Event> query = queryFactory
                 .selectFrom(event)
+                .leftJoin(event.category).fetchJoin()
                 .where(where);
 
         if (filter.getSort() == null || filter.getSort() == EventSort.EVENT_DATE) {

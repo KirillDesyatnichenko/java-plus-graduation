@@ -114,7 +114,18 @@ public class CompilationServiceImpl implements CompilationService {
         Pageable pageable = PageRequest.of(from / size, size);
         Page<Compilation> compilationsPage = compilationRepository.findByPinned(pinned, pageable);
 
-        List<Compilation> compilations = compilationsPage.getContent();
+        List<Long> ids = compilationsPage.getContent().stream()
+                .map(Compilation::getId)
+                .toList();
+        List<Compilation> compilations = ids.isEmpty()
+                ? List.of()
+                : compilationRepository.findAllWithEventsByIdIn(ids);
+        Map<Long, Compilation> byId = compilations.stream()
+                .collect(Collectors.toMap(Compilation::getId, c -> c));
+        compilations = ids.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .toList();
         List<CompilationDto> dtos = compilationMapper.toDtoList(compilations);
         enrichCompilationDtos(compilations, dtos);
         return dtos;
@@ -125,9 +136,10 @@ public class CompilationServiceImpl implements CompilationService {
     public CompilationDto getCompilationById(Long compId) {
         log.info("Получение подборки по id: {}", compId);
 
-        Compilation compilation = entityValidator.ensureAndGet(
-                compilationRepository, compId, "Подборка"
-        );
+        Compilation compilation = compilationRepository.findByIdWithEvents(compId);
+        if (compilation == null) {
+            throw new NotFoundException("Подборка не найдена: id=" + compId);
+        }
 
         CompilationDto dto = compilationMapper.toDto(compilation);
         enrichCompilationDtos(List.of(compilation), List.of(dto));
@@ -139,7 +151,7 @@ public class CompilationServiceImpl implements CompilationService {
             return List.of();
         }
 
-        List<Event> events = eventRepository.findAllById(eventIds);
+        List<Event> events = eventRepository.findByIdIn(eventIds);
 
         // Проверяем, что все события найдены
         if (events.size() != eventIds.size()) {
