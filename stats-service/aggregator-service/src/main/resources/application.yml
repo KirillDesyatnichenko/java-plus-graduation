@@ -5,7 +5,6 @@ spring:
     import: "configserver:"
   cloud:
     config:
-      name: aggregator
       discovery:
         enabled: true
         service-id: config-server
