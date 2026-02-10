@@ -43,7 +43,7 @@ management:
 grpc:
   client:
     collector-service:
-      address: discovery:///collector-service
+      address: discovery:///collector
       negotiationType: plaintext
 
 resilience4j:

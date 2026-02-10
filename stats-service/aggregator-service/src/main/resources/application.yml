@@ -7,13 +7,13 @@ spring:
     config:
       discovery:
         enabled: true
-        service-id: config-server
+        serviceId: config-server
       retry:
-        use-random-policy: true
+        useRandomPolicy: true
         max-interval: 6000
       fail-fast: true
 
 eureka:
   client:
-    service-url:
-      defaultZone: http://${eureka.instance.hostname:localhost}:${server.instance.port:8761}/eureka
+    serviceUrl:
+      defaultZone: http://${eureka.instance.hostname:localhost}:${eureka.instance.port:8761}/eureka/
