@@ -1,10 +1,11 @@
 spring:
   application:
-    name: collector-service
+    name: collector
   config:
     import: "configserver:"
   cloud:
     config:
+      name: collector
       discovery:
         enabled: true
         service-id: config-server

@@ -1,11 +1,11 @@
 spring:
   application:
-    name: analyzer-service
+    name: analyzer
   config:
     import: "configserver:"
   cloud:
     config:
-      name: analyzer-service
+      name: analyzer
       discovery:
         enabled: true
         service-id: config-server

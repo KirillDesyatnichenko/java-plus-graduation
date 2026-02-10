@@ -1,11 +1,11 @@
 spring:
   application:
-    name: aggregator-service
+    name: aggregator
   config:
     import: "configserver:"
   cloud:
     config:
-      name: aggregator-service
+      name: aggregator
       discovery:
         enabled: true
         service-id: config-server
