@@ -5,7 +5,6 @@ spring:
     import: "configserver:"
   cloud:
     config:
-      name: analyzer-service
       discovery:
         enabled: true
         service-id: config-server
