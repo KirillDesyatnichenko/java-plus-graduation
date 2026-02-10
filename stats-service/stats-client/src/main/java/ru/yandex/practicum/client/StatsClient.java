@@ -19,11 +19,14 @@ import ru.yandex.practicum.client.exception.StatsServerUnavailable;
 import ru.yandex.practicum.dto.EndpointHitDto;
 import ru.yandex.practicum.dto.ViewStatsDto;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.net.URI;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -97,9 +100,9 @@ public class StatsClient {
     }
 
     private String readBodyAsString(ClientHttpResponse res) {
-        try (var reader = new java.io.BufferedReader(
-                new java.io.InputStreamReader(res.getBody(), StandardCharsets.UTF_8))) {
-            return reader.lines().collect(java.util.stream.Collectors.joining("\n"));
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(res.getBody(), StandardCharsets.UTF_8))) {
+            return reader.lines().collect(Collectors.joining("\n"));
         } catch (Exception e) {
             return "не удалось прочитать тело ответа";
         }

@@ -2,8 +2,11 @@ package ru.yandex.practicum.request.service;
 
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.yandex.practicum.client.recommendation.CollectorGrpcClient;
+import ru.yandex.practicum.client.recommendation.UserActionType;
 import ru.yandex.practicum.common.EntityValidator;
 import ru.yandex.practicum.event.dto.EventInfoDto;
 import ru.yandex.practicum.event.dto.enums.EventState;
@@ -27,6 +30,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RequestServiceImpl implements RequestService {
 
     private final RequestRepository requestRepository;
@@ -34,6 +38,7 @@ public class RequestServiceImpl implements RequestService {
     private final EntityValidator entityValidator;
     private final UserClient userClient;
     private final EventInfoLookupService eventInfoLookupService;
+    private final CollectorGrpcClient collectorGrpcClient;
 
     @Override
     public List<RequestDto> getUserRequests(Long userId) {
@@ -77,6 +82,8 @@ public class RequestServiceImpl implements RequestService {
         request.setCreated(creationTime);
 
         Request saved = requestRepository.save(request);
+
+        sendRegisterAction(userId, eventId);
 
         return mapper.toDto(saved);
     }
@@ -208,6 +215,14 @@ public class RequestServiceImpl implements RequestService {
             throw new NotFoundException("User with id=" + userId + " was not found");
         } catch (Exception ex) {
             throw new ValidationException("User-service недоступен");
+        }
+    }
+
+    private void sendRegisterAction(long userId, long eventId) {
+        try {
+            collectorGrpcClient.collectUserAction(userId, eventId, UserActionType.REGISTER);
+        } catch (Exception ex) {
+            log.error("Не удалось отправить регистрацию в Collector: {}", ex.getMessage());
         }
     }
 

@@ -1,0 +1,58 @@
+server:
+  port: 0
+
+grpc:
+  server:
+    port: 0
+
+spring:
+  sql:
+    init:
+      mode: always
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+  datasource:
+    driverClassName: org.postgresql.Driver
+    url: jdbc:postgresql://analyzer-db:5432/analyzerdb
+    username: dbuser
+    password: 12345
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: stats-analyzer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
+      value-deserializer: ru.yandex.practicum.stats.avro.UserActionAvroDeserializer
+
+stats:
+  topics:
+    user-actions: stats.user-actions.v1
+    events-similarity: stats.events-similarity.v1
+  actions:
+    view: 1.0
+    register: 2.0
+    like: 3.0
+  recommendations:
+    default-limit: 10
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://discovery-server:8761/eureka/
+  instance:
+    preferIpAddress: true
+    instance-id: ${spring.application.name}:${random.value}
+    leaseRenewalIntervalInSeconds: 10
