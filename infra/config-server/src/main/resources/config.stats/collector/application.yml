@@ -29,7 +29,7 @@ management:
 eureka:
   client:
     serviceUrl:
-      defaultZone: http://discovery-server:8761/eureka/
+      defaultZone: http://${eureka.instance.hostname:localhost}:${eureka.instance.port:8761}/eureka/
     initialInstanceInfoReplicationIntervalSeconds: 1
     instanceInfoReplicationIntervalSeconds: 1
   instance:
