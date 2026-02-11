@@ -40,6 +40,12 @@ management:
     health:
       show-details: never
 
+grpc:
+  client:
+    collector-service:
+      address: discovery:///collector
+      negotiationType: plaintext
+
 resilience4j:
   retry:
     instances:

@@ -1,6 +1,6 @@
 package ru.yandex.practicum.event.dto.enums;
 
 public enum EventSort {
-    VIEWS,
+    RATING,
     EVENT_DATE
 }

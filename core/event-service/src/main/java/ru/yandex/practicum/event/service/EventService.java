@@ -1,16 +1,16 @@
 package ru.yandex.practicum.event.service;
 
 import feign.FeignException;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import ru.yandex.practicum.client.StatsClient;
+import ru.yandex.practicum.client.recommendation.CollectorGrpcClient;
+import ru.yandex.practicum.client.recommendation.RecommendationsGrpcClient;
+import ru.yandex.practicum.client.recommendation.RecommendedEvent;
+import ru.yandex.practicum.client.recommendation.UserActionType;
 import ru.yandex.practicum.common.EntityValidator;
-import ru.yandex.practicum.dto.EndpointHitDto;
-import ru.yandex.practicum.dto.ViewStatsDto;
 import ru.yandex.practicum.event.dao.EventRepository;
 import ru.yandex.practicum.event.dto.*;
 import ru.yandex.practicum.event.dto.enums.AdminStateAction;
@@ -26,7 +26,6 @@ import ru.yandex.practicum.exception.ExistException;
 import ru.yandex.practicum.exception.InvalidDateRangeException;
 import ru.yandex.practicum.exception.NotFoundException;
 import ru.yandex.practicum.exception.ValidationException;
-import ru.yandex.practicum.event.service.ExternalLookupService;
 import ru.yandex.practicum.user.client.UserClient;
 import ru.yandex.practicum.user.dto.UserShortDto;
 
@@ -40,8 +39,8 @@ import java.util.stream.Collectors;
 public class EventService {
     private final EventRepository eventRepository;
     private final EventMapper eventMapper;
-    private final StatsClient statsClient;
-    private final HttpServletRequest request;
+    private final CollectorGrpcClient collectorGrpcClient;
+    private final RecommendationsGrpcClient recommendationsGrpcClient;
     private final EntityValidator entityValidator;
     private final UserClient userClient;
     private final ExternalLookupService externalLookupService;
@@ -149,26 +148,64 @@ public class EventService {
         List<EventShortDto> dtos = eventMapper.toEventsShortDto(events);
         enrichShortDtos(events, dtos, true, confirmedCounts);
 
-        saveHit();
-
-        if (filter.getSort() != null && filter.getSort() == EventSort.VIEWS) {
-            dtos.sort(Comparator.comparing(EventShortDto::getViews).reversed());
+        if (filter.getSort() != null && filter.getSort() == EventSort.RATING) {
+            dtos.sort(Comparator.comparing(EventShortDto::getRating).reversed());
         }
 
         return dtos;
     }
 
-    public EventFullDto findPublicEventById(long id) {
+    public EventFullDto findPublicEventById(long id, Long userId) {
         Event event = findByPublicId(id);
 
         EventFullDto dto = eventMapper.toEventFullDto(event);
         if (dto != null) {
-            String uri = request.getRequestURI();
-            saveHit(uri);
+            if (userId != null) {
+                collectUserAction(userId, event.getId(), UserActionType.VIEW);
+            }
             enrichFullDto(event, dto, true, null);
         }
 
         return dto;
+    }
+
+    public List<EventShortDto> getRecommendationsForUser(long userId, int size) {
+        List<RecommendedEvent> recommendations = recommendationsGrpcClient.getRecommendationsForUser(userId, size);
+        if (recommendations == null || recommendations.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> eventIds = recommendations.stream()
+                .map(RecommendedEvent::eventId)
+                .toList();
+
+        Map<Long, Event> eventsById = eventRepository.findAllById(eventIds).stream()
+                .filter(event -> event.getState() == EventState.PUBLISHED)
+                .collect(Collectors.toMap(Event::getId, event -> event));
+
+        List<Event> orderedEvents = new ArrayList<>();
+        for (Long eventId : eventIds) {
+            Event event = eventsById.get(eventId);
+            if (event != null) {
+                orderedEvents.add(event);
+            }
+        }
+
+        List<EventShortDto> dtos = eventMapper.toEventsShortDto(orderedEvents);
+        enrichShortDtos(orderedEvents, dtos, false, null);
+
+        Map<Long, Double> scores = recommendations.stream()
+                .collect(Collectors.toMap(RecommendedEvent::eventId, RecommendedEvent::score, (a, b) -> a));
+        for (EventShortDto dto : dtos) {
+            dto.setRating(scores.getOrDefault(dto.getId(), 0.0));
+        }
+
+        return dtos;
+    }
+
+    public void likeEvent(long userId, long eventId) {
+        Event event = findByPublicId(eventId);
+        collectUserAction(userId, event.getId(), UserActionType.LIKE);
     }
 
     public List<EventFullDto> searchEventsByAdmin(AdminEventFilter filter) {
@@ -233,7 +270,7 @@ public class EventService {
 
     private void enrichShortDtos(List<Event> events,
                                  List<EventShortDto> dtos,
-                                 boolean includeViews,
+                                 boolean includeRatings,
                                  Map<Long, Long> confirmedCounts) {
         if (dtos == null || dtos.isEmpty()) {
             return;
@@ -245,18 +282,17 @@ public class EventService {
         Map<Long, Long> counts = confirmedCounts != null ? confirmedCounts
                 : externalLookupService.fetchConfirmedCounts(events.stream().map(Event::getId).toList());
 
-        Map<String, Long> hits = Map.of();
-        if (includeViews) {
-            List<String> uris = dtos.stream().map(d -> "/events/" + d.getId()).toList();
-            hits = fetchHitsForUris(uris);
+        Map<Long, Double> ratings = Map.of();
+        if (includeRatings) {
+            ratings = fetchRatingsForEvents(events.stream().map(Event::getId).toList());
         }
 
         for (EventShortDto dto : dtos) {
             Long initiatorId = eventToInitiator.get(dto.getId());
             dto.setInitiator(users.getOrDefault(initiatorId, fallbackUser(initiatorId)));
             dto.setConfirmedRequests(counts.getOrDefault(dto.getId(), 0L));
-            if (includeViews) {
-                dto.setViews(hits.getOrDefault("/events/" + dto.getId(), 0L));
+            if (includeRatings) {
+                dto.setRating(ratings.getOrDefault(dto.getId(), 0.0));
             }
         }
     }
@@ -267,7 +303,7 @@ public class EventService {
 
     private void enrichFullDtos(List<Event> events,
                                 List<EventFullDto> dtos,
-                                boolean includeViews,
+                                boolean includeRatings,
                                 Map<Long, Long> confirmedCounts) {
         if (dtos == null || dtos.isEmpty()) {
             return;
@@ -279,23 +315,22 @@ public class EventService {
         Map<Long, Long> counts = confirmedCounts != null ? confirmedCounts
                 : externalLookupService.fetchConfirmedCounts(events.stream().map(Event::getId).toList());
 
-        Map<String, Long> hits = Map.of();
-        if (includeViews) {
-            List<String> uris = dtos.stream().map(d -> "/events/" + d.getId()).toList();
-            hits = fetchHitsForUris(uris);
+        Map<Long, Double> ratings = Map.of();
+        if (includeRatings) {
+            ratings = fetchRatingsForEvents(events.stream().map(Event::getId).toList());
         }
 
         for (EventFullDto dto : dtos) {
             Long initiatorId = eventToInitiator.get(dto.getId());
             dto.setInitiator(users.getOrDefault(initiatorId, fallbackUser(initiatorId)));
             dto.setConfirmedRequests(counts.getOrDefault(dto.getId(), 0L));
-            if (includeViews) {
-                dto.setViews(hits.getOrDefault("/events/" + dto.getId(), 0L));
+            if (includeRatings) {
+                dto.setRating(ratings.getOrDefault(dto.getId(), 0.0));
             }
         }
     }
 
-    private void enrichFullDto(Event event, EventFullDto dto, boolean includeViews, Long confirmedCount) {
+    private void enrichFullDto(Event event, EventFullDto dto, boolean includeRatings, Long confirmedCount) {
         if (dto == null) {
             return;
         }
@@ -307,54 +342,37 @@ public class EventService {
                 .getOrDefault(event.getId(), 0L);
         dto.setConfirmedRequests(confirmed);
 
-        if (includeViews) {
-            Map<String, Long> hits = fetchHitsForUris(List.of("/events/" + dto.getId()));
-            dto.setViews(hits.getOrDefault("/events/" + dto.getId(), 0L));
+        if (includeRatings) {
+            Map<Long, Double> ratings = fetchRatingsForEvents(List.of(event.getId()));
+            dto.setRating(ratings.getOrDefault(event.getId(), 0.0));
         }
     }
 
-    private void saveHit() {
-        saveHit(request.getRequestURI());
-    }
-
-    private void saveHit(String uri) {
-        try {
-            EndpointHitDto hitDto = EndpointHitDto.builder()
-                    .app("event-service")
-                    .uri(uri)
-                    .ip(resolveClientIp())
-                    .timestamp(LocalDateTime.now())
-                    .build();
-
-            statsClient.saveHit(hitDto);
-        } catch (Exception e) {
-            log.error("Не удалось отправить информацию о просмотре в сервис статистики: {}", e.getMessage());
-        }
-    }
-
-    private String resolveClientIp() {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-        return request.getRemoteAddr();
-    }
-
-    private Map<String, Long> fetchHitsForUris(List<String> uris) {
-        try {
-            LocalDateTime start = LocalDateTime.now().minusYears(10);
-            LocalDateTime end = LocalDateTime.now().plusDays(1);
-            List<ViewStatsDto> stats = statsClient.getStats(start, end, uris, true);
-            if (stats == null || stats.isEmpty()) return Map.of();
-            return stats.stream().collect(Collectors.toMap(
-                    ViewStatsDto::getUri, v -> v.getHits() == null ? 0L : v.getHits()));
-        } catch (Exception e) {
-            log.error("Не удалось получить просмотры из сервиса статистики: {}", e.getMessage());
+    private Map<Long, Double> fetchRatingsForEvents(List<Long> eventIds) {
+        if (eventIds == null || eventIds.isEmpty()) {
             return Map.of();
+        }
+        try {
+            List<RecommendedEvent> recommendations = recommendationsGrpcClient.getInteractionsCount(
+                    eventIds,
+                    eventIds.size()
+            );
+            if (recommendations == null || recommendations.isEmpty()) {
+                return Map.of();
+            }
+            return recommendations.stream()
+                    .collect(Collectors.toMap(RecommendedEvent::eventId, RecommendedEvent::score, (a, b) -> a));
+        } catch (Exception e) {
+            log.error("Не удалось получить рейтинг из Analyzer: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private void collectUserAction(long userId, long eventId, UserActionType actionType) {
+        try {
+            collectorGrpcClient.collectUserAction(userId, eventId, actionType);
+        } catch (Exception ex) {
+            log.error("Не удалось отправить действие пользователя в Collector: {}", ex.getMessage());
         }
     }
 

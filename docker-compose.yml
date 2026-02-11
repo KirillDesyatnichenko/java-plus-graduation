@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   discovery-server:
     build:
@@ -43,6 +41,32 @@ services:
       comments-service:
         condition: service_healthy
 
+  kafka:
+    image: bitnamilegacy/kafka:3.7
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false
+
+  kafka-init:
+    image: bitnamilegacy/kafka:3.7
+    container_name: kafka-init
+    depends_on:
+      - kafka
+    entrypoint: [ "bash", "-c" ]
+    command: >
+      "kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic stats.user-actions.v1 --replication-factor 1 --partitions 1 &&
+       kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic stats.events-similarity.v1 --replication-factor 1 --partitions 1"
+
   stats-db:
     image: postgres:16.1
     container_name: stats-db
@@ -81,6 +105,92 @@ services:
       - SPRING_DATASOURCE_PASSWORD=12345
     healthcheck:
       test: [ "CMD-SHELL", "wget -q --spider http://localhost:9090/actuator/health || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  analyzer-db:
+    image: postgres:16.1
+    container_name: analyzer-db
+    environment:
+      - POSTGRES_DB=analyzerdb
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=12345
+    tmpfs:
+      - /var/lib/postgresql/data
+    ports:
+      - "5438:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  collector-service:
+    build:
+      context: ./stats-service/collector-service
+      dockerfile: Dockerfile
+    image: ewm-collector-service:latest
+    container_name: collector-service
+    depends_on:
+      kafka:
+        condition: service_started
+      kafka-init:
+        condition: service_started
+      config-server:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  aggregator-service:
+    build:
+      context: ./stats-service/aggregator-service
+      dockerfile: Dockerfile
+    image: ewm-aggregator-service:latest
+    container_name: aggregator-service
+    depends_on:
+      kafka:
+        condition: service_started
+      kafka-init:
+        condition: service_started
+      config-server:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  analyzer-service:
+    build:
+      context: ./stats-service/analyzer-service
+      dockerfile: Dockerfile
+    image: ewm-analyzer-service:latest
+    container_name: analyzer-service
+    depends_on:
+      analyzer-db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      kafka-init:
+        condition: service_started
+      config-server:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://analyzer-db:5432/analyzerdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1" ]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -163,6 +273,10 @@ services:
       - "8082:8080"
     depends_on:
       stats-server:
+        condition: service_healthy
+      collector-service:
+        condition: service_healthy
+      analyzer-service:
         condition: service_healthy
       event-db:
         condition: service_healthy
