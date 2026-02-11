@@ -18,12 +18,12 @@ public class SimilarityAggregator {
     private final Map<Integer, Double> eventWeightSums = new HashMap<>();
     private final Map<Integer, Map<Integer, Double>> eventMinSums = new HashMap<>();
     private final Map<Integer, Set<Integer>> eventPairIndex = new HashMap<>();
+    private final Map<Long, Double> publishedScores = new HashMap<>();
 
     public synchronized void handle(UserActionAvro action) {
         int userId = action.getUserId();
         int eventId = action.getEventId();
         double newWeight = resolveWeight(action.getActionType());
-        Set<Long> changedPairs = new HashSet<>();
 
         Map<Integer, Double> userWeights = userEventWeights.computeIfAbsent(userId, id -> new HashMap<>());
         Double oldWeight = userWeights.get(eventId);
@@ -53,10 +53,9 @@ public class SimilarityAggregator {
             Map<Integer, Double> minSums = eventMinSums.computeIfAbsent(eventA, id -> new HashMap<>());
             minSums.put(eventB, minSums.getOrDefault(eventB, 0.0) + (newMin - oldMin));
             indexPair(eventA, eventB);
-            changedPairs.add(composePairKey(eventA, eventB));
         }
 
-        recomputeSimilarities(changedPairs);
+        recomputeSimilarities(eventId);
     }
 
     private double resolveWeight(ActionTypeAvro actionType) {
@@ -75,16 +74,22 @@ public class SimilarityAggregator {
         eventPairIndex.computeIfAbsent(eventB, id -> new HashSet<>()).add(eventA);
     }
 
-    private void recomputeSimilarities(Set<Long> changedPairs) {
-        for (long pairKey : changedPairs) {
-            int eventA = (int) (pairKey >>> 32);
-            int eventB = (int) pairKey;
+    private void recomputeSimilarities(int eventId) {
+        Set<Integer> related = eventPairIndex.getOrDefault(eventId, Collections.emptySet());
+        for (int otherEventId : related) {
+            int eventA = Math.min(eventId, otherEventId);
+            int eventB = Math.max(eventId, otherEventId);
+            long pairKey = composePairKey(eventA, eventB);
             double minSum = eventMinSums.getOrDefault(eventA, Collections.emptyMap())
                     .getOrDefault(eventB, 0.0);
             double sumA = eventWeightSums.getOrDefault(eventA, 0.0);
             double sumB = eventWeightSums.getOrDefault(eventB, 0.0);
             double score = (sumA <= 0.0 || sumB <= 0.0) ? 0.0 : minSum / Math.sqrt(sumA * sumB);
-            producer.send(eventA, eventB, score);
+            Double prevScore = publishedScores.get(pairKey);
+            if (prevScore == null || Double.compare(prevScore, score) != 0) {
+                producer.send(eventA, eventB, score);
+                publishedScores.put(pairKey, score);
+            }
         }
     }
 
