@@ -48,6 +48,12 @@ management:
     health:
       show-details: never
 
+      logging:
+        level:
+          com.netflix.discovery: DEBUG
+          org.springframework.cloud.netflix.eureka: DEBUG
+          org.springframework.cloud.client.serviceregistry: DEBUG
+
 eureka:
   client:
     serviceUrl:
