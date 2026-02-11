@@ -27,6 +27,12 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
       value-deserializer: ru.yandex.practicum.stats.avro.UserActionAvroDeserializer
+  cloud:
+    discovery:
+      enabled: true
+    service-registry:
+      auto-registration:
+        enabled: true
 
 stats:
   topics:
@@ -48,14 +54,11 @@ management:
     health:
       show-details: never
 
-      logging:
-        level:
-          com.netflix.discovery: DEBUG
-          org.springframework.cloud.netflix.eureka: DEBUG
-          org.springframework.cloud.client.serviceregistry: DEBUG
-
 eureka:
   client:
+    enabled: true
+    register-with-eureka: true
+    fetch-registry: true
     serviceUrl:
       defaultZone: http://${eureka.instance.hostname:localhost}:${eureka.instance.port:8761}/eureka/
     initialInstanceInfoReplicationIntervalSeconds: 1

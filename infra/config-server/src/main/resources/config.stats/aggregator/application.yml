@@ -12,6 +12,12 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.LongSerializer
       value-serializer: ru.yandex.practicum.stats.avro.SpecificRecordAvroSerializer
+  cloud:
+    discovery:
+      enabled: true
+    service-registry:
+      auto-registration:
+        enabled: true
 
 stats:
   topics:
@@ -31,14 +37,11 @@ management:
     health:
       show-details: never
 
-logging:
-  level:
-    com.netflix.discovery: DEBUG
-    org.springframework.cloud.netflix.eureka: DEBUG
-    org.springframework.cloud.client.serviceregistry: DEBUG
-
 eureka:
   client:
+    enabled: true
+    register-with-eureka: true
+    fetch-registry: true
     serviceUrl:
       defaultZone: http://${eureka.instance.hostname:localhost}:${eureka.instance.port:8761}/eureka/
   instance:
