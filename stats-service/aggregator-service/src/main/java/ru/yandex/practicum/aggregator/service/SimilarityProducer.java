@@ -11,6 +11,8 @@ import java.time.Instant;
 @Service
 @RequiredArgsConstructor
 public class SimilarityProducer {
+    private record EventPair(int eventA, int eventB) {}
+
     private final KafkaTemplate<Long, EventSimilarityAvro> kafkaTemplate;
     private final StatsTopicsProperties topics;
 
@@ -21,7 +23,7 @@ public class SimilarityProducer {
         similarity.setScore(score);
         similarity.setTimestamp(Instant.now());
 
-        long key = ((long) eventA) << 32 | (eventB & 0xffffffffL);
+        long key = new EventPair(eventA, eventB).hashCode();
         kafkaTemplate.send(topics.getEventsSimilarity(), key, similarity);
     }
 }
