@@ -24,9 +24,9 @@ stats:
     user-actions: stats.user-actions.v1
     events-similarity: stats.events-similarity.v1
   actions:
-    view: 1.0
-    register: 2.0
-    like: 3.0
+    view: 0.4
+    register: 0.8
+    like: 1.0
 
 management:
   endpoints:

@@ -23,6 +23,7 @@ public class SimilarityAggregator {
         int userId = action.getUserId();
         int eventId = action.getEventId();
         double newWeight = resolveWeight(action.getActionType());
+        Set<Long> changedPairs = new HashSet<>();
 
         Map<Integer, Double> userWeights = userEventWeights.computeIfAbsent(userId, id -> new HashMap<>());
         Double oldWeight = userWeights.get(eventId);
@@ -52,9 +53,10 @@ public class SimilarityAggregator {
             Map<Integer, Double> minSums = eventMinSums.computeIfAbsent(eventA, id -> new HashMap<>());
             minSums.put(eventB, minSums.getOrDefault(eventB, 0.0) + (newMin - oldMin));
             indexPair(eventA, eventB);
+            changedPairs.add(composePairKey(eventA, eventB));
         }
 
-        recomputeSimilarities(eventId);
+        recomputeSimilarities(changedPairs);
     }
 
     private double resolveWeight(ActionTypeAvro actionType) {
@@ -73,11 +75,10 @@ public class SimilarityAggregator {
         eventPairIndex.computeIfAbsent(eventB, id -> new HashSet<>()).add(eventA);
     }
 
-    private void recomputeSimilarities(int eventId) {
-        Set<Integer> related = eventPairIndex.getOrDefault(eventId, Collections.emptySet());
-        for (int otherEventId : related) {
-            int eventA = Math.min(eventId, otherEventId);
-            int eventB = Math.max(eventId, otherEventId);
+    private void recomputeSimilarities(Set<Long> changedPairs) {
+        for (long pairKey : changedPairs) {
+            int eventA = (int) (pairKey >>> 32);
+            int eventB = (int) pairKey;
             double minSum = eventMinSums.getOrDefault(eventA, Collections.emptyMap())
                     .getOrDefault(eventB, 0.0);
             double sumA = eventWeightSums.getOrDefault(eventA, 0.0);
@@ -85,5 +86,9 @@ public class SimilarityAggregator {
             double score = (sumA <= 0.0 || sumB <= 0.0) ? 0.0 : minSum / Math.sqrt(sumA * sumB);
             producer.send(eventA, eventB, score);
         }
+    }
+
+    private long composePairKey(int eventA, int eventB) {
+        return ((long) eventA << 32) | (eventB & 0xffffffffL);
     }
 }
